@@ -2,32 +2,52 @@ import numpy as np
 import pandas as pd
 import json
 
-from numba.core.cgutils import printf
-from sklearn.preprocessing import LabelEncoder
+# Constant for the target column
+TARGET_COLUMN = 'PlayTennis'
 
 # Load and prepare your dataset
 def load_data(file_path):
     data = pd.read_csv(file_path)
+    print('---------------------------------------------------------')
     print(data)
-    print('----------------------------------')
+    print('\n---------------------------------------------------------')
+    summarize_data(data)
+    return data
+
+# Summarize the dataset
+def summarize_data(data):
     print('Unique values in each column:')
     for column in data.columns:
-        print(f'{column}: {data[column].unique().__len__()}')
-    return pd.read_csv(file_path)
+        print(f'{column}: {data[column].unique()}')
+    print('\n---------------------------------------------------------')
+    summarize_occurrences(data)
 
-# Encode categorical features
-def encode_data(data):
-    label_encoders = {}
-    for column in data.select_dtypes(include=['object']).columns:
-        le = LabelEncoder()
-        data[column] = le.fit_transform(data[column])
-        label_encoders[column] = le
-    return data, label_encoders
+# Summarize the occurrences of each value in the target column
+def summarize_occurrences(data):
+    target_value_counts = data[TARGET_COLUMN]
+    print('Occurrences of each value in the target column:')
+    print(target_value_counts.value_counts())
+    print('\n---------------------------------------------------------')
+    print('Occurrences of each value in the target column (normalized):')
+    print(target_value_counts.value_counts(normalize=True))
+    print('\n---------------------------------------------------------')
+    # Summarize the occurrences of each value for Yes and No
+    for column in data.drop(columns=[TARGET_COLUMN]).columns:
+        print(f'Occurrences of each value in the {column} column:')
+        print(data.groupby([column, TARGET_COLUMN]).size())
+        print('\n---------------------------------------------------------')
+        print(f'Occurrences of each value in the {column} column (likelihoods):')
+        print(data.groupby([column, TARGET_COLUMN]).size() / data.groupby(TARGET_COLUMN).size())
+        print('\n---------------------------------------------------------')
+
 
 # Calculate prior probabilities
 def calculate_prior(data, target_column):
     priors = data[target_column].value_counts(normalize=True).to_dict()
+    print('Priors:')
+    print(priors)
     return priors
+
 
 # Calculate likelihoods with Laplace smoothing
 def calculate_likelihoods(data, target_column):
@@ -82,10 +102,11 @@ def evaluate_model(data, model, target_column):
 
 # Start the program
 if __name__ == "__main__":
-    data = load_data('play_tennis_dataset.csv')
-    data, label_encoders = encode_data(data)
-    model = train_naive_bayes(data, 'Wind')
-    save_model(model, 'naive_bayes_model.json')
-    loaded_model = load_model('naive_bayes_model.json')
-    accuracy = evaluate_model(data, loaded_model, 'Wind')
-    print(f'Accuracy: {accuracy}')
+    data_set = load_data('play_tennis_dataset.csv')
+    #label_encoders, data_set = encode_data(data_set)
+    calculate_likelihoods(data_set, TARGET_COLUMN)
+    training_model = train_naive_bayes(data_set, TARGET_COLUMN)
+    #save_model(model, 'naive_bayes_model.json')
+    #loaded_model = load_model('naive_bayes_model.json')
+    #accuracy = evaluate_model(data, loaded_model, 'Wind')
+    #print(f'Accuracy: {accuracy}')
