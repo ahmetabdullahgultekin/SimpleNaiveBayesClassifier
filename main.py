@@ -1,7 +1,7 @@
 import json
-
-import numpy as np
 import pandas as pd
+
+# Ahmet Abdullah Gültekin 150121025
 
 # Constant for the target column
 TARGET_COLUMN = 'PlayTennis'
@@ -29,7 +29,11 @@ def summarize_data(data):
 # Summarize the occurrences of each value in the target column
 def summarize_occurrences(data):
     target_value_counts = data[TARGET_COLUMN]
-    # add_data_to_json(data, target_value_counts)
+    # clear content of json
+    with open('values.json', 'a') as json_file:
+        json_file.seek(0)
+        json_file.truncate()
+    add_data_to_json(data, target_value_counts)
     # print_values_from_json()
     # print_values_from_memory(target_value_counts, data)
 
@@ -111,24 +115,14 @@ def train_naive_bayes(data, target_column):
     return {'priors': priors, 'likelihoods': likelihoods}
 
 
-# Save the model as a JSON file
-def save_model(model, file_path):
-    with open(file_path, 'w') as file:
-        json.dump(model, file)
-
-
-# Load the model from JSON file
-def load_model(file_path):
-    with open(file_path, 'r') as file:
-        return json.load(file)
-
-
 # List the classes of the new instance
 def predict_the_result(new_instance, target_column):
     # total = P(Outlook = Sunny) * P(Temperature = Cool) * P(Humidity = High) * P(Wind = Strong) * P(PlayTennis = Yes)
     sum_of_yes = 1
     # total = P(Outlook = Sunny) * P(Temperature = Cool) * P(Humidity = High) * P(Wind = Strong) * P(PlayTennis = No)
     sum_of_no = 1
+    # sum
+    prediction_value = 1
     # Search the classes of the new instance in the json file
     with open('values.json', 'r') as values_file:
         values = json.load(values_file)
@@ -137,26 +131,24 @@ def predict_the_result(new_instance, target_column):
                 # ('Sunny', 'No') is the format in the json file
                 filter_string = f"('{instance}', '{target_column}')"
                 if filter_string in value:
-                    print("---------------------------------------------------------")
-                    print(f"key: {key} - value: {instance} - likelihood: {value[filter_string]}")
-                    if 0 < value[filter_string] <= 1:
-                        if target_column == 'Yes':
+                    if 0 < value[filter_string] < 1:
+                        print(f"key: {key} - value: {instance} - likelihood: {value[filter_string]}")
+                        prediction_value *= value[filter_string]
+                        print("---------------------------------------------------------")
+                        print(f"Prediction value for {target_column}: {prediction_value}")
+                        """if target_column == 'Yes':
                             sum_of_yes *= value[filter_string]
-                            print("*******************************************************")
-                            print(f"Total1: {sum_of_yes}")
+                            print("---------------------------------------------------------")
+                            print(f"Sum of {target_column}: {sum_of_yes}")
                         else:
                             sum_of_no *= value[filter_string]
-                            print("*******************************************************")
-                            print(f"Total2: {sum_of_no}")
-                    print("---------------------------------------------------------")
-                    print(sum_of_yes)
-                    print(sum_of_no)
-
+                            print("---------------------------------------------------------")
+                            print(f"Sum of {target_column}: {sum_of_no}")"""
 
     # Get the values of prediction from the model belongs to the new instance
     # New values array
-    new_values = [sum_of_yes, sum_of_no]
-    return new_values
+    # new_values = [sum_of_yes, sum_of_no]
+    return prediction_value
 
 
 # calculate the probabilities of the new instance
@@ -175,6 +167,13 @@ def calculate_probabilities(new_instance, data):
 def print_results(new_values):
     print("---------------------------------------------------------")
     print(f"Result of the new instance: {new_values}")
+    # Make the prediction
+    if new_prediction_classes[1] > new_prediction_classes[0]:
+        print("Comparison: Yes > No ")
+        print("The new instance is classified as 'Yes'.")
+    else:
+        print("Comparison: No > Yes")
+        print("The new instance is classified as 'No'.")
 
 
 # Start the program
@@ -187,8 +186,12 @@ if __name__ == "__main__":
     summarize_occurrences(data_set)
     # Train the Naive Bayes model
     training_model = train_naive_bayes(data_set, TARGET_COLUMN)
-    # Get the likelihoods of the new instance
-    new_prediction_classes = predict_the_result(new_prediction_data, TARGET_COLUMN)
+    # Predict the result for each target column value
+    new_prediction_classes = []
+    for target_value in data_set[TARGET_COLUMN].unique():
+        print("---------------------------------------------------------")
+        print(f"Prediction for {target_value}:")
+        print("---------------------------------------------------------")
+        new_prediction_classes.append(predict_the_result(new_prediction_data, target_value))
     # Print the results
     print_results(new_prediction_classes)
-    # calculate_probabilities(new_prediction_data, data_set)
