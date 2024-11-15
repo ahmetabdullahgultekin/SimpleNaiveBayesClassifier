@@ -1,8 +1,7 @@
-import numpy as np
-import pandas as pd
 import json
 
-from panel.io.resources import json_dumps
+import numpy as np
+import pandas as pd
 
 # Constant for the target column
 TARGET_COLUMN = 'PlayTennis'
@@ -11,7 +10,8 @@ TARGET_COLUMN = 'PlayTennis'
 # Load and prepare your dataset
 def load_data(file_path):
     data = pd.read_csv(file_path)
-    print('---------------------------------------------------------')
+    print('---------------------------------------------------------\n')
+    print('Dataset:')
     print(data)
     print('\n---------------------------------------------------------')
     summarize_data(data)
@@ -20,7 +20,7 @@ def load_data(file_path):
 
 # Summarize the dataset
 def summarize_data(data):
-    print('Unique values in each column:')
+    print('\nUnique values in each column:\n')
     for column in data.columns:
         print(f'{column}: {data[column].unique()}')
     print('\n---------------------------------------------------------')
@@ -29,9 +29,9 @@ def summarize_data(data):
 # Summarize the occurrences of each value in the target column
 def summarize_occurrences(data):
     target_value_counts = data[TARGET_COLUMN]
-    add_data_to_json(data, target_value_counts)
+    # add_data_to_json(data, target_value_counts)
     # print_values_from_json()
-    print_values_from_memory(target_value_counts, data)
+    # print_values_from_memory(target_value_counts, data)
 
 
 # Write the datas to the json file
@@ -45,13 +45,16 @@ def add_data_to_json(data, target_value_counts):
         for column in data.drop(columns=[TARGET_COLUMN]).columns:
             values_file.write(data.groupby([column, TARGET_COLUMN]).size().to_json() + ',')
             # Do not add comma at the end
-            #values_file.write((data.groupby([column, TARGET_COLUMN]).size() / data.groupby(TARGET_COLUMN).size()).to_json() + ',')
+            # values_file.write((data.groupby([column, TARGET_COLUMN]).size() / data.groupby(TARGET_COLUMN).size()).to_json() + ',')
             if column == data.drop(columns=[TARGET_COLUMN]).columns[-1]:
-                values_file.write((data.groupby([column, TARGET_COLUMN]).size() / data.groupby(TARGET_COLUMN).size()).to_json())
+                values_file.write(
+                    (data.groupby([column, TARGET_COLUMN]).size() / data.groupby(TARGET_COLUMN).size()).to_json())
             else:
-                values_file.write((data.groupby([column, TARGET_COLUMN]).size() / data.groupby(TARGET_COLUMN).size()).to_json() + ',')
+                values_file.write(
+                    (data.groupby([column, TARGET_COLUMN]).size() / data.groupby(TARGET_COLUMN).size()).to_json() + ',')
         values_file.write(']')
         values_file.write('}')
+
 
 # Print the values from the json file
 def print_values_from_json():
@@ -83,8 +86,8 @@ def print_values_from_memory(target_value_counts, data):
 def calculate_prior(data, target_column):
     priors = {}
     priors = data[target_column].value_counts(normalize=True).to_dict()
-    print('Priors:')
-    print(priors)
+    # print('Priors:')
+    # print(priors)
     return priors
 
 
@@ -120,47 +123,72 @@ def load_model(file_path):
         return json.load(file)
 
 
-# Predict class for a single instance
-def predict(instance, model):
-    # Get the values of the priors and likelihoods from the model belongs to the instance
-    model.get('priors')
-    priors = model['priors']
-    likelihoods = model['likelihoods']
-    posteriors = {}
-    for class_value in priors.keys():
-        posterior = np.log(priors[class_value])
-        for feature, value in instance.items():
-            if value in likelihoods[feature]:
-                posterior += np.log(likelihoods[feature][value].get(class_value, 1e-6))
-        posteriors[class_value] = posterior
-    return max(posteriors, key=posteriors.get)
+# List the classes of the new instance
+def predict_the_result(new_instance, target_column):
+    # total = P(Outlook = Sunny) * P(Temperature = Cool) * P(Humidity = High) * P(Wind = Strong) * P(PlayTennis = Yes)
+    sum_of_yes = 1
+    # total = P(Outlook = Sunny) * P(Temperature = Cool) * P(Humidity = High) * P(Wind = Strong) * P(PlayTennis = No)
+    sum_of_no = 1
+    # Search the classes of the new instance in the json file
+    with open('values.json', 'r') as values_file:
+        values = json.load(values_file)
+        for value in values['Values']:
+            for key, instance in new_instance.items():
+                # ('Sunny', 'No') is the format in the json file
+                filter_string = f"('{instance}', '{target_column}')"
+                if filter_string in value:
+                    print("---------------------------------------------------------")
+                    print(f"key: {key} - value: {instance} - likelihood: {value[filter_string]}")
+                    if 0 < value[filter_string] <= 1:
+                        if target_column == 'Yes':
+                            sum_of_yes *= value[filter_string]
+                            print("*******************************************************")
+                            print(f"Total1: {sum_of_yes}")
+                        else:
+                            sum_of_no *= value[filter_string]
+                            print("*******************************************************")
+                            print(f"Total2: {sum_of_no}")
+                    print("---------------------------------------------------------")
+                    print(sum_of_yes)
+                    print(sum_of_no)
 
 
-# Evaluate the model on test data
-def evaluate_model(data, model, target_column):
-    correct = 0
-    for _, row in data.iterrows():
-        instance = row.drop(labels=[target_column]).to_dict()
-        if predict(instance, model) == row[target_column]:
-            correct += 1
-    return correct / len(data)
+    # Get the values of prediction from the model belongs to the new instance
+    # New values array
+    new_values = [sum_of_yes, sum_of_no]
+    return new_values
+
+
+# calculate the probabilities of the new instance
+def calculate_probabilities(new_instance, data):
+    # Multiply the likelihoods of the new instance
+    # result = P(Outlook = Sunny | PlayTennis = Yes) * P(Temperature = Cool | PlayTennis = Yes)
+    # * P(Humidity = High | PlayTennis = Yes) * P(Wind = Strong | PlayTennis = Yes) * P(PlayTennis = Yes)
+    # Iterate over the target column
+    for target_value in data[TARGET_COLUMN].unique():
+        predict_the_result(new_instance, target_value)
+    # result = P(Outlook = Sunny | PlayTennis = No) * P(Temperature = Cool | PlayTennis = No)
+    # * P(Humidity = High | PlayTennis = No) * P(Wind = Strong | PlayTennis = No) * P(PlayTennis = No)
+
+
+# Print the results
+def print_results(new_values):
+    print("---------------------------------------------------------")
+    print(f"Result of the new instance: {new_values}")
 
 
 # Start the program
 if __name__ == "__main__":
-    data_set = load_data('play_tennis_dataset.csv')
-    summarize_occurrences(data_set)
-    calculate_likelihoods(data_set)
-    training_model = train_naive_bayes(data_set, TARGET_COLUMN)
-    print(training_model)
+    # Enter the new instance
     new_prediction_data = {'Outlook': 'Sunny', 'Temperature': 'Cool', 'Humidity': 'High', 'Wind': 'Strong'}
-    #prediction = predict(new_prediction_data, training_model)
-    # add_data_to_json(training_model)
-    # save_model(model, 'naive_bayes_model.json')
-    # loaded_model = load_model('naive_bayes_model.json')
-    # accuracy = evaluate_model(data, loaded_model, 'Wind')
-    # print(f'Accuracy: {accuracy}')
-    # Predict a new instance
-    # new_instance = {'Outlook': 'Sunny', 'Temperature': 'Cool', 'Humidity': 'High', 'Wind': 'Strong'}
-    # prediction = predict(new_instance, model)
-    # print(f'Prediction for the new instance: {prediction}')
+    # Load the dataset
+    data_set = load_data('play_tennis_dataset.csv')
+    # Summarize the dataset
+    summarize_occurrences(data_set)
+    # Train the Naive Bayes model
+    training_model = train_naive_bayes(data_set, TARGET_COLUMN)
+    # Get the likelihoods of the new instance
+    new_prediction_classes = predict_the_result(new_prediction_data, TARGET_COLUMN)
+    # Print the results
+    print_results(new_prediction_classes)
+    # calculate_probabilities(new_prediction_data, data_set)
